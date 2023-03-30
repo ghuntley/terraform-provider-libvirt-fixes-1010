@@ -682,6 +682,35 @@ func resourceLibvirtDomainUpdate(ctx context.Context, d *schema.ResourceData, me
 		}
 	}
 
+	if d.HasChange("running") {
+		state, _, err := virConn.DomainGetState(domain, 0)
+		if err != nil {
+			return diag.Errorf("couldn't get info about domain: %s", err)
+		}
+
+		// DomainNostate     DomainState = iota
+		// DomainRunning     DomainState = 1
+		// DomainBlocked     DomainState = 2
+		// DomainPaused      DomainState = 3
+		// DomainShutdown    DomainState = 4
+		// DomainShutoff     DomainState = 5
+		// DomainCrashed     DomainState = 6
+		// DomainPmsuspended DomainState = 7
+
+		if state == int32(libvirt.DomainRunning) || state == int32(libvirt.DomainPaused) || state == int32(libvirt.DomainCrashed) || state == int32(libvirt.DomainPmsuspended) {
+			if err := virConn.DomainShutdown(domain); err != nil {
+				return diag.Errorf("ZZZ couldn't shutdown libvirt domain: %s", err)
+			}
+		}
+
+		if state == int32(libvirt.DomainNostate) || state == int32(libvirt.DomainShutdown) {
+			if err := virConn.DomainCreate(domain); err != nil {
+				return diag.Errorf("ZZZ couldn't start libvirt domain: %s", err)
+			}
+		}
+
+	}
+
 	if d.HasChange("cloudinit") {
 		cloudinitID, err := getCloudInitVolumeKeyFromTerraformID(d.Get("cloudinit").(string))
 		if err != nil {
